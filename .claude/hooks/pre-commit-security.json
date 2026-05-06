@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/security-scan.py"
+            "command": "python3 <your-clone-path>/.claude/hooks/security-scan.py"
           }
         ]
       }
