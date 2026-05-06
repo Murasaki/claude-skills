@@ -14,7 +14,7 @@ A personal library of reusable Claude Code assets. All assets live under `.claud
 
 ## Rules active in this repo
 
-**Commit prefix** — All commits must be prefixed with `[claude]`, e.g. `[claude] add security review skill`. Defined in `.claude/rules/commit-prefix.md`.
+**Commits** — Follow conventional commits format with a `[claude]` prefix, e.g. `[claude] feat: add security review skill`. Defined in `.claude/rules/commits.md`.
 
 ## Conventions
 
