@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Scans everything about to be pushed, then has Claude review it for privacy problems.
+#   1. gitleaks over the outgoing commits (catches anything committed with --no-verify)
+#   2. a privacy review of the outgoing diff by `claude -p`, using your Claude Code login
+# Fails closed: if the review can't run, the push is stopped.
+# Bypass once: SKIP_SECRET_SCAN=1 (both checks) or SKIP_PRIVACY_REVIEW=1 (review only) git push ...
+# Opt a repo out of the review (not gitleaks): git config hooks.privacyReview false
+set -uo pipefail
+source "$(dirname "$0")/lib/common.sh"
+
+remote_name="${1:-origin}"
+remote_url="${2:-}"
+ZERO=0000000000000000000000000000000000000000
+MAX_DIFF_BYTES=200000
+
+updates="$(cat)"
+printf '%s\n' "$updates" | run_repo_hook pre-push "$@" || exit $?
+
+if [ "${SKIP_SECRET_SCAN:-}" = "1" ]; then
+    yellow "SKIP_SECRET_SCAN=1: secret and privacy checks skipped for this push."
+    exit 0
+fi
+
+require_gitleaks || exit 1
+
+# Build the list of outgoing ranges (one per pushed ref; deletions have nothing to scan).
+ranges=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "${local_sha:-}" ] && continue
+    case "$local_sha" in *[!0]*) ;; *) continue ;; esac   # all zeros: branch deletion
+    if [ "$remote_sha" = "$ZERO" ] || ! git cat-file -e "$remote_sha" 2>/dev/null; then
+        ranges+=("$local_sha --not --remotes=$remote_name")   # new branch: commits not on the remote yet
+    else
+        ranges+=("$remote_sha..$local_sha")
+    fi
+done <<< "$updates"
+
+[ "${#ranges[@]}" -eq 0 ] && exit 0
+
+# 1. gitleaks over the outgoing commits.
+for range in "${ranges[@]}"; do
+    if ! gitleaks git --log-opts="$range" --redact --no-banner --log-level warn \
+            --config "$GITLEAKS_CONFIG" . ; then
+        red "gitleaks found possible secrets in commits being pushed (values redacted above)."
+        info "Fix the commit history before pushing; a pushed secret must be treated as leaked."
+        exit 1
+    fi
+done
+
+# 2. Privacy review by Claude.
+if [ "${SKIP_PRIVACY_REVIEW:-}" = "1" ]; then
+    yellow "SKIP_PRIVACY_REVIEW=1: Claude privacy review skipped for this push."
+    exit 0
+fi
+
+# Repos whose code mustn't be sent to Claude (e.g. employer repos) opt out with
+# `git config hooks.privacyReview false`, typically set for a whole folder via includeIf.
+if [ "$(git config --bool hooks.privacyReview 2>/dev/null)" = "false" ]; then
+    info "Privacy review disabled for this repo (hooks.privacyReview=false); gitleaks still ran."
+    exit 0
+fi
+
+diff=""
+files=""
+for range in "${ranges[@]}"; do
+    # shellcheck disable=SC2086  # range holds several git arguments on purpose
+    diff+="$(git log -p --no-color --no-ext-diff --format='=== commit %h: %s' $range)"$'\n'
+    # shellcheck disable=SC2086
+    files+="$(git log --no-color --name-status --format= $range)"$'\n'
+done
+
+if [ -z "$(printf '%s' "$diff" | tr -d '[:space:]')" ]; then
+    exit 0   # nothing new (e.g. pushing commits the remote already has)
+fi
+
+truncated="no"
+if [ "${#diff}" -gt "$MAX_DIFF_BYTES" ]; then
+    diff="${diff:0:$MAX_DIFF_BYTES}"
+    truncated="yes (first $MAX_DIFF_BYTES characters only; judge the rest from the file list)"
+fi
+
+visibility="unknown"
+if command -v gh >/dev/null 2>&1 && [[ "$remote_url" =~ github\.com[:/]([^/]+/[^/.]+) ]]; then
+    visibility="$(gh repo view "${BASH_REMATCH[1]}" --json visibility -q .visibility 2>/dev/null || echo unknown)"
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+    red "Claude Code (claude) isn't on PATH, so the privacy review can't run."
+    info "Bypass once: SKIP_PRIVACY_REVIEW=1 git push ..."
+    exit 1
+fi
+
+prompt="$(cat "$HOOKS_DIR/privacy-review-prompt.md")"
+input="$(printf 'Repository: %s\nRemote: %s\nVisibility: %s\nDiff truncated: %s\n\nChanged files (status, path):\n%s\n\nDiff:\n%s\n' \
+    "$(basename "$(git rev-parse --show-toplevel)")" "$remote_url" "$visibility" "$truncated" "$files" "$diff")"
+
+info "Claude privacy review of the outgoing changes ($visibility repo)..."
+# Run from a temp dir so no project CLAUDE.md is loaded; no tools, no MCP, no saved session.
+review="$(cd "${TMPDIR:-/tmp}" && printf '%s' "$input" | claude -p --model sonnet --tools "" \
+    --strict-mcp-config --no-session-persistence "$prompt" 2>&1)"
+status=$?
+
+verdict="$(printf '%s\n' "$review" | sed -n '1{s/[^A-Z]//g;p}')"
+
+if [ $status -ne 0 ] || { [ "$verdict" != "PASS" ] && [ "$verdict" != "BLOCK" ]; }; then
+    red "The privacy review couldn't run or gave no verdict, so the push is stopped (fail closed)."
+    info "$review"
+    info "Bypass once: SKIP_PRIVACY_REVIEW=1 git push ..."
+    exit 1
+fi
+
+if [ "$verdict" = "BLOCK" ]; then
+    red "Privacy review flagged the push:"
+    printf '%s\n' "$review" | sed 1d >&2
+    info ""
+    info "If this is a false positive: SKIP_PRIVACY_REVIEW=1 git push ..."
+    exit 1
+fi
+
+info "Privacy review: PASS"

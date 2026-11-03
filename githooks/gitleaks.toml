@@ -1,0 +1,20 @@
+# gitleaks config used by the pre-commit and pre-push hooks: the built-in ruleset plus a few
+# extra rules. For a false positive in one repo, add its fingerprint to that repo's
+# .gitleaksignore, or put a "gitleaks:allow" comment on the line.
+
+title = "claude-skills hooks"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "rapidapi-key"
+description = "RapidAPI key (e.g. JSearch)"
+regex = '''\b[0-9a-f]{10}msh[0-9a-f]{15}p[0-9a-f]{6}jsn[0-9a-f]{12}\b'''
+keywords = ["msh"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key"
+regex = '''\bsk-ant-(?:api|admin)\d{2}-[A-Za-z0-9_\-]{80,}\b'''
+keywords = ["sk-ant-"]

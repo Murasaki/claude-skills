@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Blocks commits that stage secrets or obvious personal data.
+#   1. gitleaks over the staged changes (secrets, keys, tokens)
+#   2. file checks: .env / key files / machine-local settings, and CSVs with personal columns
+# Allow a path past check 2 by listing it in .privacy-allow; silence a gitleaks false positive
+# with .gitleaksignore or an inline "gitleaks:allow" comment.
+# Bypass once: SKIP_SECRET_SCAN=1 git commit ...
+set -uo pipefail
+source "$(dirname "$0")/lib/common.sh"
+
+run_repo_hook pre-commit "$@" || exit $?
+
+if [ "${SKIP_SECRET_SCAN:-}" = "1" ]; then
+    yellow "SKIP_SECRET_SCAN=1: secret and privacy checks skipped for this commit."
+    exit 0
+fi
+
+require_gitleaks || exit 1
+
+failed=0
+
+if ! gitleaks git --pre-commit --staged --redact --no-banner --log-level warn \
+        --config "$GITLEAKS_CONFIG" . ; then
+    red "gitleaks found possible secrets in the staged changes (values redacted above)."
+    failed=1
+fi
+
+while IFS= read -r -d '' path; do
+    is_privacy_allowed "$path" && continue
+
+    if reason="$(is_blocked_name "$path")"; then
+        red "Blocked: $path ($reason)"
+        failed=1
+        continue
+    fi
+
+    case "$path" in
+        *.csv|*.CSV|*.tsv|*.TSV)
+            if column="$(csv_personal_column ":$path")" && [ -n "$column" ]; then
+                red "Blocked: $path (CSV with a personal-data column: '$column')"
+                failed=1
+            fi
+            ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+if [ "$failed" -ne 0 ]; then
+    info ""
+    info "Commit stopped. Unstage the file (git restore --staged <path>) and add it to .gitignore,"
+    info "or, if it's intentional and safe, list it in .privacy-allow at the repo root."
+    info "Bypass once (only if you're sure): SKIP_SECRET_SCAN=1 git commit ..."
+    exit 1
+fi

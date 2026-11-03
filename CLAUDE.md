@@ -1,33 +1,42 @@
 # claude-skills
 
-A personal library of reusable Claude Code assets. All assets live under `.claude/` so the whole directory can be linked into consuming projects.
+A personal library of reusable Claude Code assets: rules that other projects import from their
+`CLAUDE.md`, and git hooks installed machine-wide via `core.hooksPath`. See `README.md` for usage.
 
 ## Repo structure
 
 ```
 .claude/
-├── commands/    # Slash commands (Claude Code standard location)
-├── rules/       # Standalone rules to paste into a project's CLAUDE.md
-├── hooks/       # Hook JSON snippets to merge into settings.json
-└── subagents/   # Agent prompt definitions
+└── rules/                 # Markdown rules, imported by relative path from a project's CLAUDE.md
+    ├── commits.md
+    ├── pullrequests.md
+    └── privacy.md
+githooks/                  # git hooks for every repo on the PC (core.hooksPath points here)
+├── pre-commit             # gitleaks on staged changes + personal-data file checks
+├── pre-push               # gitleaks on outgoing commits + `claude -p` privacy review
+├── gitleaks.toml          # gitleaks default rules + extra rules (RapidAPI, Anthropic)
+├── privacy-review-prompt.md
+└── lib/common.sh          # shared helpers (sourced by both hooks)
 ```
 
 ## Rules active in this repo
 
-**Commits** — Follow conventional commits format with a `[claude]` prefix, e.g. `[claude] feat: add security review skill`. Defined in `.claude/rules/commits.md`.
+@.claude/rules/commits.md
+@.claude/rules/pullrequests.md
+@.claude/rules/privacy.md
 
-## Conventions
+## Working on the hooks
 
-- Every asset has a header explaining its purpose and usage
-- Commands use `verb-noun.md` naming (e.g. `review-security.md`, `init-project.md`)
-- Subagents use `noun-role.md` naming (e.g. `docs-guardian.md`, `code-explorer.md`)
-- Hook snippets document the event they target (`PreToolUse`, `PostToolUse`, `Stop`, etc.)
+- The hooks are bash; Git for Windows runs them with its own bash, so keep to POSIX tools plus
+  bash builtins (no Python).
+- They're live on every repo on this PC. Test changes in a scratch repo first, with
+  `git -c core.hooksPath=<this folder>/githooks ...` or a local `git config core.hooksPath`,
+  against a local bare repo as the remote.
+- Keep them failing closed: when a check can't run, stop the commit/push with a clear message
+  and the bypass variable.
+- Never print a matched secret: gitleaks runs with `--redact`, and the review prompt forbids
+  repeating values.
 
-## Adding a new asset
+## Open TODOs
 
-| Type | Location | Notes |
-|------|----------|-------|
-| Skill / command | `.claude/commands/` | Available as a slash command |
-| Rule | `.claude/rules/` | Copy content into consuming project's `CLAUDE.md` |
-| Hook | `.claude/hooks/` | Merge into consuming project's `.claude/settings.json` |
-| Subagent | `.claude/subagents/` | Reference prompt when using the `Agent` tool |
+- Convert to a Claude Code plugin so commands/agents can be shared without relative imports.
