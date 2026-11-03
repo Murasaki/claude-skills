@@ -23,7 +23,17 @@ Secret and privacy checks for **every** git repo on the machine, not only commit
 | Hook | Checks | Bypass once |
 |------|--------|-------------|
 | `pre-commit` | [gitleaks](https://github.com/gitleaks/gitleaks) over staged changes (with `githooks/gitleaks.toml`); blocks `.env`, key and certificate files, `settings.local.json`, `CLAUDE.local.md`, and CSV/TSV files with a personal-data column (name, email, DOB, ...) and at least one data row | `SKIP_SECRET_SCAN=1` |
-| `pre-push` | gitleaks over every outgoing commit, then a **privacy review by `claude -p`** of the outgoing diff, told whether the GitHub repo is public or private. Fails closed: if the review can't run, the push stops | `SKIP_PRIVACY_REVIEW=1` (review only), `SKIP_SECRET_SCAN=1` (both) |
+| `pre-push` | gitleaks over every outgoing commit; for non-private repos, an **identity check** on commit author/committer metadata (see below); then a **privacy review by `claude -p`** of the outgoing diff, told whether the GitHub repo is public or private. Fails closed: if the review can't run, the push stops | `SKIP_PRIVACY_REVIEW=1` (review only), `SKIP_SECRET_SCAN=1` (all) |
+
+**Identity check:** commit metadata isn't part of the diff, so neither gitleaks nor the review sees
+it. List names and emails that must never reach a public repo in your **local** git config (not
+in any repo), and pushes to public or unknown-visibility repos are blocked if an outgoing commit
+carries one:
+
+```powershell
+git config --global --add hooks.blockedIdentity "Real Name"
+git config --global --add hooks.blockedIdentity "real.email@example.com"
+```
 
 Per-repo exceptions:
 - `.privacy-allow` at the repo root: glob patterns, one per line, let files past the pre-commit

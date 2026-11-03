@@ -16,9 +16,14 @@ Flag (BLOCK) any of these:
   number, salary, settlement terms) and anything an employer would treat as confidential.
 
 Do not flag:
-- In a PRIVATE repository, the owner's own career material: their CV, interview notes, prep docs.
+- In a PRIVATE repository, anything about the repository owner themselves: their name, email,
+  usernames or aliases (past or present), CV, interview notes, prep docs, setup notes. A private
+  repo is the right place for these; "it could leak if the repo were made public" is not a finding.
 - Fictional or obviously invented sample data (for example "Jamie, they/them, wants to be a vet").
 - Names that only appear as authors, maintainers, licence holders or public figures.
+
+BLOCK only for a real problem you'd stop the push for. If the only concerns are minor, speculative
+or low-severity, reply PASS.
 
 Reply in this exact format, with no preamble:
 - First line: exactly PASS or BLOCK.
