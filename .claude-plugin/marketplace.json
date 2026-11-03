@@ -1,0 +1,14 @@
+{
+  "name": "murasaki-plugins",
+  "owner": { "name": "Murasaki" },
+  "metadata": {
+    "description": "Murasaki's personal Claude Code plugins."
+  },
+  "plugins": [
+    {
+      "name": "murasaki",
+      "source": "./",
+      "description": "Shared Claude Code commands: Blender asset pipeline, Godot game-dev task runner and ComfyUI scene backdrops."
+    }
+  ]
+}

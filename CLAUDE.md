@@ -1,11 +1,16 @@
 # claude-skills
 
 A personal library of reusable Claude Code assets: rules that other projects import from their
-`CLAUDE.md`, and git hooks installed machine-wide via `core.hooksPath`. See `README.md` for usage.
+`CLAUDE.md`, slash commands shipped as the `murasaki` plugin (this repo is also its marketplace,
+`murasaki-plugins`), and git hooks installed machine-wide via `core.hooksPath`. See `README.md` for usage.
 
 ## Repo structure
 
 ```
+.claude-plugin/
+├── plugin.json            # the `murasaki` plugin (name can't start with "claude-": reserved)
+└── marketplace.json       # marketplace `murasaki-plugins`, listing this repo root as the plugin
+commands/                  # plugin slash commands: /murasaki:blender, :gamedev, :backdrop
 .claude/
 └── rules/                 # Markdown rules, imported by relative path from a project's CLAUDE.md
     ├── commits.md
@@ -25,6 +30,13 @@ githooks/                  # git hooks for every repo on the PC (core.hooksPath 
 @.claude/rules/pullrequests.md
 @.claude/rules/privacy.md
 
+## Working on the plugin
+
+- Run `claude plugin validate .` after changing `.claude-plugin/` or `commands/`.
+- Commands must not hard-code machine paths; read them from an environment variable documented in
+  the README (e.g. `COMFYUI_PYTHON`).
+- Bump `version` in `plugin.json` when commands change.
+
 ## Working on the hooks
 
 - The hooks are bash; Git for Windows runs them with its own bash, so keep to POSIX tools plus
@@ -39,4 +51,5 @@ githooks/                  # git hooks for every repo on the PC (core.hooksPath 
 
 ## Open TODOs
 
-- Convert to a Claude Code plugin so commands/agents can be shared without relative imports.
+- Rules are still shared by relative `@` import; they could move into the plugin as skills.
+- No LICENSE yet (the plugin directory requires one for submission; not needed for personal use).

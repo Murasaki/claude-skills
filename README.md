@@ -1,6 +1,36 @@
 # claude-skills
 
-Reusable Claude Code rules and git hooks.
+Reusable Claude Code rules, commands (as the `murasaki` plugin) and git hooks.
+
+## Plugin: commands (`commands/`)
+
+This repo is also a Claude Code plugin marketplace (`murasaki-plugins`) holding one plugin, `murasaki`.
+
+| Command | What it does | Run from |
+|---|---|---|
+| `/murasaki:blender` | Create or edit a Blender asset through a re-runnable Python script, export GLB, optionally wire it into a Godot scene | a Godot game repo |
+| `/murasaki:gamedev <task>` | Run a `docs/tasks` task end to end: clarify, plan, trace file, implement, manual test, merge to `dev` | a Godot game repo |
+| `/murasaki:backdrop <prompt>` | Generate a scene backdrop (still or animated WebP) via ComfyUI | a repo with `tools/generate_backdrop.py`; needs `COMFYUI_PYTHON` set |
+
+Install:
+
+```
+claude plugin install murasaki --marketplace Murasaki/claude-skills
+```
+
+Or enable it for a project in its tracked `.claude/settings.json`, so every PC that clones the project gets it:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "murasaki-plugins": { "source": { "source": "github", "repo": "Murasaki/claude-skills" } }
+  },
+  "enabledPlugins": { "murasaki@murasaki-plugins": true }
+}
+```
+
+The plugin is served from GitHub's `main`, so changes here reach other projects once merged and the
+marketplace is updated (`claude plugin marketplace update murasaki-plugins`).
 
 ## Rules (`.claude/rules/`)
 
