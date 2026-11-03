@@ -1,0 +1,7 @@
+{
+  "name": "murasaki",
+  "description": "Murasaki's shared Claude Code commands: Blender asset pipeline, Godot game-dev task runner and ComfyUI scene backdrops.",
+  "version": "0.1.0",
+  "author": { "name": "Murasaki" },
+  "repository": "https://github.com/Murasaki/claude-skills"
+}
