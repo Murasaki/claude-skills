@@ -32,6 +32,15 @@ Per-repo exceptions:
 
 A repo's own `.git/hooks/pre-commit` / `pre-push` still runs: the hooks chain to it.
 
+**Employer or other third-party code:** the privacy review sends the outgoing diff to Claude under
+your login. Turn it off where that isn't allowed (gitleaks still runs locally):
+
+```ini
+# e.g. in ~/.gitconfig-work, included for every repo under C:\src\work
+[hooks]
+    privacyReview = false
+```
+
 ### Install (once per PC)
 
 ```powershell

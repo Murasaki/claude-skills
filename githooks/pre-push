@@ -4,6 +4,7 @@
 #   2. a privacy review of the outgoing diff by `claude -p`, using your Claude Code login
 # Fails closed: if the review can't run, the push is stopped.
 # Bypass once: SKIP_SECRET_SCAN=1 (both checks) or SKIP_PRIVACY_REVIEW=1 (review only) git push ...
+# Opt a repo out of the review (not gitleaks): git config hooks.privacyReview false
 set -uo pipefail
 source "$(dirname "$0")/lib/common.sh"
 
@@ -49,6 +50,13 @@ done
 # 2. Privacy review by Claude.
 if [ "${SKIP_PRIVACY_REVIEW:-}" = "1" ]; then
     yellow "SKIP_PRIVACY_REVIEW=1: Claude privacy review skipped for this push."
+    exit 0
+fi
+
+# Repos whose code mustn't be sent to Claude (e.g. employer repos) opt out with
+# `git config hooks.privacyReview false`, typically set for a whole folder via includeIf.
+if [ "$(git config --bool hooks.privacyReview 2>/dev/null)" = "false" ]; then
+    info "Privacy review disabled for this repo (hooks.privacyReview=false); gitleaks still ran."
     exit 0
 fi
 
