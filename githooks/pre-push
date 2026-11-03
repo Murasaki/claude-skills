@@ -47,6 +47,31 @@ for range in "${ranges[@]}"; do
     fi
 done
 
+visibility="unknown"
+if command -v gh >/dev/null 2>&1 && [[ "$remote_url" =~ github\.com[:/]([^/]+/[^/.]+) ]]; then
+    visibility="$(gh repo view "${BASH_REMATCH[1]}" --json visibility -q .visibility 2>/dev/null || echo unknown)"
+fi
+
+# Identities that must never appear in public commit metadata (author/committer name or email).
+# Kept in local git config, not in this file, so the values aren't published with the hooks:
+#   git config --global --add hooks.blockedIdentity "Real Name"
+#   git config --global --add hooks.blockedIdentity "real.email@example.com"
+if [ "$visibility" != "PRIVATE" ]; then
+    mapfile -t blocked < <(git config --get-all hooks.blockedIdentity 2>/dev/null)
+    if [ "${#blocked[@]}" -gt 0 ]; then
+        for range in "${ranges[@]}"; do
+            # shellcheck disable=SC2086  # range holds several git arguments on purpose
+            hits="$(git log --format='%h %an <%ae> / %cn <%ce>' $range | grep -iF "${blocked[@]/#/-e}")"
+            if [ -n "$hits" ]; then
+                red "Commits being pushed to a $visibility repo carry an identity listed in hooks.blockedIdentity:"
+                printf '%s\n' "$hits" | cut -d' ' -f1 | sed 's/^/  commit /' >&2
+                info "Fix the author (e.g. git commit --amend --reset-author, or rewrite with a mailmap) and push again."
+                exit 1
+            fi
+        done
+    fi
+fi
+
 # 2. Privacy review by Claude.
 if [ "${SKIP_PRIVACY_REVIEW:-}" = "1" ]; then
     yellow "SKIP_PRIVACY_REVIEW=1: Claude privacy review skipped for this push."
@@ -79,11 +104,6 @@ if [ "${#diff}" -gt "$MAX_DIFF_BYTES" ]; then
     truncated="yes (first $MAX_DIFF_BYTES characters only; judge the rest from the file list)"
 fi
 
-visibility="unknown"
-if command -v gh >/dev/null 2>&1 && [[ "$remote_url" =~ github\.com[:/]([^/]+/[^/.]+) ]]; then
-    visibility="$(gh repo view "${BASH_REMATCH[1]}" --json visibility -q .visibility 2>/dev/null || echo unknown)"
-fi
-
 if ! command -v claude >/dev/null 2>&1; then
     red "Claude Code (claude) isn't on PATH, so the privacy review can't run."
     info "Bypass once: SKIP_PRIVACY_REVIEW=1 git push ..."
@@ -91,8 +111,12 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 prompt="$(cat "$HOOKS_DIR/privacy-review-prompt.md")"
+# Works in bare repos (e.g. mirror clones) too, which have no work tree.
+repo_dir="$(git rev-parse --show-toplevel 2>/dev/null || git rev-parse --absolute-git-dir)"
+repo_name="$(basename "$repo_dir" .git)"
+
 input="$(printf 'Repository: %s\nRemote: %s\nVisibility: %s\nDiff truncated: %s\n\nChanged files (status, path):\n%s\n\nDiff:\n%s\n' \
-    "$(basename "$(git rev-parse --show-toplevel)")" "$remote_url" "$visibility" "$truncated" "$files" "$diff")"
+    "$repo_name" "$remote_url" "$visibility" "$truncated" "$files" "$diff")"
 
 info "Claude privacy review of the outgoing changes ($visibility repo)..."
 # Run from a temp dir so no project CLAUDE.md is loaded; no tools, no MCP, no saved session.
